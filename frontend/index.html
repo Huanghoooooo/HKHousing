@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>香港房产数据智能查询平台</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Phone Frame -->
+  <div class="phone-frame">
+
+    <!-- ========== Status Bar ========== -->
+    <div class="status-bar">
+      <span>12:29</span>
+      <span class="status-icons">5G ████ 🔔</span>
+    </div>
+
+    <!-- ========== Nav Bar ========== -->
+    <div class="nav-bar" id="navBar">
+      <span class="nav-back" id="navBack" onclick="goBack()" style="visibility:hidden">←</span>
+      <span class="nav-title" id="navTitle">全港成交</span>
+      <span class="nav-action"></span>
+    </div>
+
+    <!-- ========== Page 1: Home (6 Grid) ========== -->
+    <div class="page active" id="page-home">
+      <div class="home-content">
+        <!-- Search Bar -->
+        <div class="search-bar" onclick="navigateTo('search')">
+          <span class="search-icon">🔍</span>
+          <span class="search-placeholder">输入屋苑名称搜索...</span>
+        </div>
+
+        <!-- AI Insight Banner -->
+        <div class="insight-banner" id="insightBanner">
+          <div class="insight-label">🤖 AI 市场洞察</div>
+          <div class="insight-text" id="insightText">加载中...</div>
+        </div>
+
+        <!-- Tools Grid -->
+        <div class="tools-grid">
+          <div class="tool-card" onclick="navigateTo('transactions')">
+            <div class="tool-icon">🏠</div>
+            <div class="tool-name">全港成交</div>
+            <div class="tool-desc">最新二手成交</div>
+          </div>
+          <div class="tool-card" onclick="navigateTo('search')">
+            <div class="tool-icon">🔎</div>
+            <div class="tool-name">屋苑搜索</div>
+            <div class="tool-desc">按名称查屋苑</div>
+          </div>
+          <div class="tool-card" onclick="navigateTo('market')">
+            <div class="tool-icon">📊</div>
+            <div class="tool-name">行情统计</div>
+            <div class="tool-desc">实时市场动态</div>
+          </div>
+          <div class="tool-card" onclick="navigateTo('stamp-duty')">
+            <div class="tool-icon">💰</div>
+            <div class="tool-name">税费计算</div>
+            <div class="tool-desc">印花税计算器</div>
+          </div>
+          <div class="tool-card disabled">
+            <div class="tool-icon">🏗️</div>
+            <div class="tool-name">一手新盘</div>
+            <div class="tool-desc">二期上线</div>
+          </div>
+          <div class="tool-card disabled">
+            <div class="tool-icon">🤖</div>
+            <div class="tool-name">AI评测助手</div>
+            <div class="tool-desc">二期上线</div>
+          </div>
+        </div>
+
+        <!-- Value-added Services -->
+        <div class="section-label">增值业务</div>
+        <div class="value-add-cards">
+          <div class="va-card disabled">
+            <div class="va-icon">📰</div>
+            <div class="va-info">
+              <div class="va-name">资产新闻智库</div>
+              <div class="va-desc">楼市资讯 + AI摘要</div>
+            </div>
+          </div>
+          <div class="va-card disabled">
+            <div class="va-icon">💬</div>
+            <div class="va-info">
+              <div class="va-name">专家购房咨询</div>
+              <div class="va-desc">一对一专业顾问</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Page 2: All-HK Transactions ========== -->
+    <div class="page" id="page-transactions">
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <div class="filter-chip" id="filterDistrict" onclick="toggleFilterPanel('district')">
+          区域 ▾
+        </div>
+        <div class="filter-chip" onclick="toggleFilterPanel('area')">
+          面积 ▾
+        </div>
+        <div class="filter-chip" onclick="toggleFilterPanel('price')">
+          楼价 ▾
+        </div>
+        <div class="filter-chip sort-chip" id="filterSort" onclick="toggleFilterPanel('sort')">
+          最新 ▾
+        </div>
+      </div>
+
+      <!-- Filter Panels -->
+      <div class="filter-panel" id="filterPanel" style="display:none"></div>
+
+      <!-- Transaction List -->
+      <div class="txn-list" id="txnList">
+        <div class="loading">加载中...</div>
+      </div>
+
+      <!-- Data Source Indicator -->
+      <div class="datasource-badge" id="dsBadge" style="display:none"></div>
+    </div>
+
+    <!-- ========== Page 3: Transaction Detail ========== -->
+    <div class="page" id="page-detail">
+      <div class="detail-content" id="detailContent"></div>
+    </div>
+
+    <!-- ========== Page 4: Estate Search ========== -->
+    <div class="page" id="page-search">
+      <div class="search-header">
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" class="search-input" id="searchInput" placeholder="输入屋苑名称（支持繁简体/英文）" autocomplete="off" onkeyup="handleSearchKey(event)">
+          <span class="search-clear" id="searchClear" onclick="clearSearch()" style="display:none">✕</span>
+        </div>
+      </div>
+      <div class="search-results" id="searchResults">
+        <div class="search-hint">输入关键字开始搜索</div>
+      </div>
+    </div>
+
+    <!-- ========== Page 5: Market Stats ========== -->
+    <div class="page" id="page-market">
+      <div class="market-content">
+        <div class="section-label">今日行情日报</div>
+        <div class="stats-grid" id="statsGrid">
+          <div class="loading">加载中...</div>
+        </div>
+        <div class="section-label">CCL 楼价指数</div>
+        <div class="index-list" id="indexList">
+          <div class="loading">加载中...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Page 6: Stamp Duty Calculator ========== -->
+    <div class="page" id="page-stamp-duty">
+      <div class="calc-content">
+        <div class="calc-group">
+          <label>物业价格（万港元）</label>
+          <input type="number" class="calc-input" id="calcPrice" placeholder="例如: 800" value="800">
+        </div>
+        <div class="calc-group">
+          <label>买家身份</label>
+          <select class="calc-input" id="calcBuyerType">
+            <option value="first_time">首置（首次置业）</option>
+            <option value="non_first">非首置（已持有物业）</option>
+            <option value="non_permanent">非永居（非香港永久居民）</option>
+          </select>
+        </div>
+        <button class="calc-btn" onclick="calcStampDuty()">计算印花税</button>
+        <div class="calc-result" id="calcResult" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- ========== Bottom Tab Bar ========== -->
+    <div class="tab-bar">
+      <div class="tab-item active" data-tab="home" onclick="switchTab('home')">
+        <span class="tab-icon">🏠</span>
+        <span class="tab-label">首页</span>
+      </div>
+      <div class="tab-item" data-tab="transactions" onclick="switchTab('transactions')">
+        <span class="tab-icon">📋</span>
+        <span class="tab-label">全港成交</span>
+      </div>
+      <div class="tab-item disabled" data-tab="ai-advisor">
+        <span class="tab-icon">🧠</span>
+        <span class="tab-label">AI智投</span>
+      </div>
+    </div>
+
+    <!-- ========== Toast ========== -->
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

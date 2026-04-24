@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<title>香港房产数据智能查询平台 — 架构与实现说明</title>
+<style>
+  @page { size: A4; margin: 25mm 18mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    font-size: 12px; line-height: 1.85; color: #222;
+    max-width: 700px; margin: 0 auto; padding: 20px 0;
+  }
+  h1 { font-size: 22px; text-align: center; margin-bottom: 6px; color: #111; }
+  h2 { font-size: 16px; margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 2px solid #1989fa; color: #111; }
+  h3 { font-size: 13px; margin: 18px 0 8px; color: #333; }
+  h4 { font-size: 12px; margin: 14px 0 6px; color: #444; }
+  p { margin-bottom: 8px; }
+  strong { color: #111; }
+  code {
+    background: #f5f5f5; padding: 1px 5px; border-radius: 3px;
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace; font-size: 10px;
+    color: #d63384;
+  }
+  pre {
+    background: #f8f9fa; border: 1px solid #e5e5e5; border-radius: 8px;
+    padding: 12px 14px; overflow-x: auto; margin: 10px 0; font-size: 10px;
+    line-height: 1.6; color: #333;
+  }
+  pre code { background: none; padding: 0; color: #333; }
+
+  /* Cover section */
+  .cover {
+    text-align: center; padding: 60px 0 40px;
+    border-bottom: 2px solid #1989fa; margin-bottom: 30px;
+  }
+  .cover h1 { font-size: 24px; margin-bottom: 10px; }
+  .cover .subtitle { font-size: 14px; color: #666; margin-bottom: 6px; }
+  .cover .meta { font-size: 11px; color: #999; margin-top: 20px; }
+
+  /* Tables */
+  table {
+    width: 100%; border-collapse: collapse; margin: 10px 0 14px;
+    font-size: 11px;
+  }
+  th {
+    background: #1989fa; color: #fff; padding: 8px 10px;
+    text-align: left; font-weight: 600;
+  }
+  td { padding: 7px 10px; border-bottom: 1px solid #e5e5e5; }
+  tr:nth-child(even) td { background: #fafafa; }
+
+  /* Blockquote */
+  blockquote {
+    border-left: 3px solid #1989fa; padding: 8px 14px;
+    margin: 12px 0; background: #f0f7ff; border-radius: 0 6px 6px 0;
+    color: #555;
+  }
+
+  /* Architecture diagram ASCII */
+  .arch-box {
+    background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px;
+    padding: 14px 16px; margin: 10px 0; font-family: "SF Mono", "Consolas", monospace;
+    font-size: 10px; line-height: 1.6; white-space: pre;
+    overflow-x: auto;
+  }
+
+  /* Page breaks */
+  .page-break { page-break-before: always; }
+
+  /* TOC */
+  .toc { margin: 20px 0; }
+  .toc a { color: #1989fa; text-decoration: none; }
+  .toc-item { margin: 4px 0; }
+
+  /* Step cards */
+  .step {
+    background: #f9fafb; border: 1px solid #e5e5e5; border-radius: 8px;
+    padding: 12px 14px; margin: 8px 0;
+  }
+  .step-title { font-weight: 700; color: #1989fa; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ================================================================ -->
+<!-- COVER -->
+<!-- ================================================================ -->
+<div class="cover">
+  <h1>香港房产数据智能查询平台</h1>
+  <div class="subtitle">架构设计与实现说明</div>
+  <div class="subtitle">—— ABCD四类数据源策略 · 技术选型 · 功能实现全解</div>
+  <div class="meta">文档版本 V1.0 &nbsp;|&nbsp; 2026年4月24日 &nbsp;|&nbsp; 面向读者：技术决策层</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TOC -->
+<!-- ================================================================ -->
+<h2>目录</h2>
+<div class="toc">
+  <div class="toc-item">一、整体架构思路 — ABCD数据源分层</div>
+  <div class="toc-item">二、数据源详情 — 各类别获取与存储方式</div>
+  <div class="toc-item">&nbsp;&nbsp;&nbsp;&nbsp;A类 · 官方静态数据（RVD差饷物业估价署）</div>
+  <div class="toc-item">&nbsp;&nbsp;&nbsp;&nbsp;B类 · 商业动态数据（6家地产中介平台）</div>
+  <div class="toc-item">&nbsp;&nbsp;&nbsp;&nbsp;C类 · 行业指数（CCL + 美联楼价指数）</div>
+  <div class="toc-item">&nbsp;&nbsp;&nbsp;&nbsp;D类 · 法律壁垒数据（土地注册处 + 银行估价）</div>
+  <div class="toc-item">三、Web应用功能清单</div>
+  <div class="toc-item">四、核心功能实现思路 — 从"为什么"到"怎么实现"</div>
+  <div class="toc-item">&nbsp;&nbsp;&nbsp;&nbsp;功能1：全港成交列表（多维筛选）</div>
+  <div class="toc-item">&nbsp;&nbsp;&nbsp;&nbsp;功能2：成交详情 + AI估值对比（Class D深链接）</div>
+  <div class="toc-item">&nbsp;&nbsp;&nbsp;&nbsp;功能3：AI市场洞察横幅</div>
+  <div class="toc-item">&nbsp;&nbsp;&nbsp;&nbsp;功能4：印花税计算器</div>
+  <div class="toc-item">&nbsp;&nbsp;&nbsp;&nbsp;功能5：行情统计日报 + 指数展示</div>
+  <div class="toc-item">五、技术选型总览</div>
+  <div class="toc-item">六、总结</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 1: Architecture -->
+<!-- ================================================================ -->
+<div class="page-break"></div>
+<h2>一、整体架构思路 — ABCD数据源分层</h2>
+
+<h3>1.1 核心问题</h3>
+<p>香港房产数据散落在多个异构数据源里，法律合规约束极强——土地注册处查册系统和银行在线估价系统有明确的法律保护，<strong>不能爬、不能存、不能中转</strong>。</p>
+<p>常规做法是"爬就完了"，但在这个项目里行不通。所以架构设计的核心不是<strong>"怎么爬"</strong>，而是<strong>"怎么分类"</strong>。</p>
+
+<h3>1.2 四层分类法</h3>
+<p>所有数据源按<strong>法律风险等级</strong>和<strong>更新频率</strong>两个维度分为 A / B / C / D 四类：</p>
+
+<table>
+  <tr><th>类别</th><th>风险等级</th><th>更新频率</th><th>策略</th><th>数据源示例</th></tr>
+  <tr><td><strong>A 类</strong></td><td>低（政府公开）</td><td>月度</td><td>定时下载 → 解析入库</td><td>差饷物业估价署 (RVD)</td></tr>
+  <tr><td><strong>B 类</strong></td><td>中（商业平台）</td><td>实时/日更</td><td>用户触发爬取 + Redis 6h缓存</td><td>中原、美联、28Hse、House730等</td></tr>
+  <tr><td><strong>C 类</strong></td><td>低（伴随B类）</td><td>周度</td><td>寄生采集 — 随B类并行抓取</td><td>CCL指数、美联楼价指数</td></tr>
+  <tr><td><strong>D 类</strong></td><td><strong>高（法律保护）</strong></td><td>—</td><td><strong>零爬取 — 前端深链接跳转</strong></td><td>土地注册处IRIS、银行估价系统</td></tr>
+</table>
+
+<h3>1.3 分层架构图</h3>
+<div class="arch-box">
+┌─────────────────────────────────────────────────────┐
+│                    微信小程序（前端）                  │
+│               UniApp / Taro → 仅输出小程序            │
+└─────────────────────┬───────────────────────────────┘
+                      │ HTTPS
+┌─────────────────────▼───────────────────────────────┐
+│              API Gateway (Nginx / Kong)               │
+│            限流 · 鉴权 (JWT+API Key) · 日志           │
+└──┬─────────┬──────────┬──────────┬──────────────────┘
+   │         │          │          │
+   ▼         ▼          ▼          ▼
+┌──────┐ ┌──────┐ ┌──────┐ ┌──────────┐
+│ 屋苑  │ │ 成交  │ │ 行情  │ │ 税费计算  │  ← 后端微服务
+│ 搜索  │ │ 数据  │ │ 统计  │ │ (纯算法)  │     Python FastAPI
+└──┬───┘ └──┬───┘ └──┬───┘ └──────────┘
+   │        │        │
+   ▼        ▼        ▼
+┌────────────────────────────────────────────────────┐
+│                    数据层                            │
+│  PostgreSQL(主库)  Redis(缓存)  Elasticsearch(搜索)  │
+│  MinIO/OSS(原始文件)                                │
+└──┬──────────┬──────────┬────────────────────────────┘
+   │          │          │
+   ▼          ▼          ▼
+┌──────┐ ┌──────┐ ┌──────┐     ┌──────────────────────┐
+│A类   │ │B类   │ │C类   │     │       D类            │
+│RVD   │ │中原  │ │CCL   │     │ 土地注册处 · 银行估价│
+│定时   │ │美联  │ │美联  │     │                      │
+│下载   │ │28Hse │ │指数  │     │ ⛔ 零爬取            │
+│Excel  │ │触发  │ │寄生  │     │ → 前端直接跳转        │
+│→ PG   │ │爬取  │ │采集  │     │ → 零后端交互          │
+└──────┘ └──────┘ └──────┘     └──────────────────────┘
+</div>
+
+<h3>1.4 分层带来的模块解耦</h3>
+<blockquote>
+  <strong>关键设计决策：</strong>B类服务和C类服务之间是寄生关系（C不独立启动爬虫，随B并行抓取指数数据）。D类服务和所有后端服务之间是<strong>零耦合</strong>（D的代码只生成URL字符串，不产生任何HTTP请求）。A类服务和用户请求路径完全独立（定时任务，不响应用户请求）。
+</blockquote>
+
+<!-- ================================================================ -->
+<!-- SECTION 2: Data Sources -->
+<!-- ================================================================ -->
+<div class="page-break"></div>
+<h2>二、数据源详情 — 各类别获取与存储方式</h2>
+
+<h3>2.1 A类 — 官方静态数据（RVD差饷物业估价署）</h3>
+<div class="step">
+  <div class="step-title">📥 获取方式</div>
+  <p>项目使用 <code>class_a.js</code> 实现了 RVD 的完整数据模型。真实部署场景下，<strong>APScheduler</strong> 每月触发定时任务：</p>
+  <p>1. 从 <code>rvd.gov.hk/tc/publications/property_market_statistics.html</code> 下载 Excel 文件</p>
+  <p>2. 用 <strong>Pandas</strong> 解析 → 数据清洗（繁体→简体映射、单位换算、异常值剔除）→ 标准化</p>
+  <p>3. 结构化数据入 PostgreSQL (<code>estate</code> 表 + <code>transaction</code> 表)</p>
+  <p>4. 原始 Excel 文件存入 MinIO/OSS 留底，便于数据回溯审计</p>
+</div>
+<div class="step">
+  <div class="step-title">💾 存储方式</div>
+  <p><strong>PostgreSQL</strong> 主库。A 类数据是整个平台的数据底座。演示版本内置了 15 个真实香港屋苑的基础信息（太古城、海怡半岛、美孚新邨、黄埔花园、沙田第一城、嘉湖山庄、日出康城、汇玺、宝翠园、名城、杏花邨、奥海城、御龙山、擎天半岛、蓝湾半岛），覆盖港岛/九龙/新界三大区域。</p>
+  <p>每个屋苑存储字段：繁体名、简体名、英文名、所属区域/分区、建成年份、总户数、屋苑类型、经纬度。</p>
+</div>
+
+<h3>2.2 B类 — 商业动态数据（6家地产中介平台）</h3>
+<div class="step">
+  <div class="step-title">📥 获取方式</div>
+  <p>用户在微信小程序中搜索/浏览时触发。后端<strong>先查 Redis 缓存</strong>：</p>
+  <table>
+    <tr><th>场景</th><th>行为</th><th>响应时间</th></tr>
+    <tr><td>缓存命中（6小时内有人查过同一数据）</td><td>直接返回缓存</td><td>&lt; 500ms</td></tr>
+    <tr><td>缓存未命中</td><td>启动 Playwright 无头 Chromium → 打开目标网站 → 等待JS渲染 → DOM选择器提取成交卡片 → 清洗入库 → 写入Redis(TTL=6h)</td><td>2-8秒</td></tr>
+  </table>
+  <p><strong>6家平台互为 fallback：</strong>任何一家的爬虫失效（网站改版、反爬升级），自动切换到下一家，确保数据不中断。</p>
+</div>
+<div class="step">
+  <div class="step-title">🔑 为什么TTL是6小时？</div>
+  <p>不是拍脑袋定的。香港房产网站的数据更新节奏是半天到一天（新房源挂牌、成交记录更新），6小时 TTL 刚好匹配这个节奏——比数据更新频率略短，确保缓存数据够新，同时命中率尽可能高。</p>
+  <p>更关键的是，6小时 TTL 天然构成了<strong>对目标站点的限流阀</strong>：同一屋苑6小时内无数人查询，只有第一个人触发爬虫，后面所有人都走缓存。用户量再大也不会对商业网站造成并发压力。</p>
+</div>
+<div class="step">
+  <div class="step-title">💾 存储方式</div>
+  <p><strong>PostgreSQL</strong> (<code>transaction</code> 表 + <code>listing</code> 表) + <strong>Redis</strong>（缓存热数据）。</p>
+  <p><code>raw_data</code> 字段使用 PostgreSQL <strong>JSONB</strong> 类型存储原始抓取内容，支持 GIN 索引——便于数据追查、清洗规则变更后的回滚、以及不同平台数据格式差异的兼容（中原的字段名和美联的不一样，JSONB天然适应）。</p>
+</div>
+
+<h3>2.3 C类 — 行业指数（CCL + 美联楼价指数）</h3>
+<div class="step">
+  <div class="step-title">📥 获取方式 — 寄生策略</div>
+  <p>执行 B 类爬虫任务时，<strong>同一进程内并行</strong>抓取指数数据。不额外启动爬虫，不额外消耗 IP 资源。指数数据量极小（每周几个数值），清洗后写入独立索引表。</p>
+  <p>这种"寄生"设计的核心收益：<strong>零额外成本获得指数数据</strong>。指数更新频率低（周度），和B类的触发频率天然不同，但采集动作复用了B类的浏览器实例和网络连接。</p>
+</div>
+<div class="step">
+  <div class="step-title">💾 存储方式</div>
+  <p>PostgreSQL <code>price_index</code> 表。按 <code>(index_name, index_date, district)</code> 三元组索引，供行情统计服务直接查库。字段包括：指数名称、日期、指数值、周变动率、月变动率、所属区域。</p>
+</div>
+
+<h3>2.4 D类 — 法律壁垒数据（土地注册处 + 银行估价）</h3>
+<div class="step">
+  <div class="step-title">🚫 获取方式 — 完全不获取</div>
+  <p><code>class_d.js</code> 的唯一职责是生成外部链接 URL。前端点击"查看银行估价"时：</p>
+  <p>1. JavaScript 组装跳转链接</p>
+  <p>2. <code>window.open()</code> 或 <code>&lt;a target="_blank"&gt;</code> 直接打开银行官网</p>
+  <p>3. <strong>请求完全不经过平台后端</strong></p>
+</div>
+<div class="step">
+  <div class="step-title">⚖️ 合规设计</div>
+  <p>合规审计时可以直接验证：后端代码里没有任何对 D 类域名的 HTTP 请求。D 类数据的<strong>获取主体是用户自己</strong>，平台只提供导航链接，法律责任完全隔离在用户侧。</p>
+  <p>D 类数据源清单：</p>
+  <table>
+    <tr><th>数据源</th><th>链接</th><th>处理方式</th></tr>
+    <tr><td>土地注册处查册</td><td>landreg.gov.hk</td><td>前端跳转</td></tr>
+    <tr><td>中银香港估价</td><td>bochk.com/mortgage/valuation</td><td>前端跳转</td></tr>
+    <tr><td>汇丰银行估价</td><td>hsbc.com.hk/mortgages</td><td>前端跳转</td></tr>
+    <tr><td>恒生银行估价</td><td>hangseng.com/mortgage</td><td>前端跳转</td></tr>
+    <tr><td>土地注册处月报</td><td>landreg.gov.hk/monthly</td><td>前端跳转</td></tr>
+  </table>
+</div>
+<div class="step">
+  <div class="step-title">💾 存储方式</div>
+  <p><strong>零存储。</strong>不存数据库、不存缓存、不记录日志。D 类数据在整个平台的生命周期里只存在于一个地方——前端的 <code>&lt;a&gt;</code> 标签的 <code>href</code> 属性里。</p>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 3: Features -->
+<!-- ================================================================ -->
+<div class="page-break"></div>
+<h2>三、Web应用功能清单</h2>
+
+<p>本次演示实现了一个<strong>仿微信小程序比例的移动端 Web 应用</strong>（375×812 手机框，浅色主题），对应原型图实现了以下功能：</p>
+
+<table>
+  <tr><th>页面</th><th>对应原型</th><th>核心功能</th><th>数据源依赖</th></tr>
+  <tr>
+    <td><strong>首页</strong></td>
+    <td>原型图1 — 首页展示页</td>
+    <td>屋苑搜索栏 + AI市场洞察横幅 + 六宫格工具矩阵（全港成交/屋苑搜索/行情统计/税费计算/一手新盘二期/AI评测二期）+ 增值业务入口</td>
+    <td>C类（洞察）</td>
+  </tr>
+  <tr>
+    <td><strong>全港成交</strong></td>
+    <td>原型图2 — 房屋浏览页</td>
+    <td>成交卡片列表 + 四维筛选（区域/面积/楼价/排序）+ 每张卡片显示屋苑名/区域/价格/呎价/间隔/面积/议价率 + 底部数据源来源实时标注</td>
+    <td>B类（爬取）</td>
+  </tr>
+  <tr>
+    <td><strong>成交详情</strong></td>
+    <td>原型图3 — 详细信息页</td>
+    <td>物业属性六宫格（面积/呎价/间隔/朝向/用途/日期）+ AI估值对比区（Class D深链接跳转中银/汇丰/恒生/土地注册处）+ 放盘交易历程时间线（首次挂牌→调价→签约→售出）</td>
+    <td>A类 + D类（深链接）</td>
+  </tr>
+  <tr>
+    <td><strong>屋苑搜索</strong></td>
+    <td>首页搜索入口</td>
+    <td>支持繁简体/英文模糊搜索 + 搜索结果列表 + 点击查看屋苑详情（基础信息+成交统计+最近成交记录）</td>
+    <td>A类</td>
+  </tr>
+  <tr>
+    <td><strong>行情统计</strong></td>
+    <td>首页工具入口</td>
+    <td>全港/分区行情日报卡片（成交量+均呎价+涨跌数）+ CCL/美联指数实时数据 + 分区明细</td>
+    <td>A类 + C类</td>
+  </tr>
+  <tr>
+    <td><strong>税费计算</strong></td>
+    <td>首页工具入口</td>
+    <td>从价印花税(AVD) + 买家印花税(BSD) + 新住宅印花税(NRSD) 自动分项计算 + 有效税率展示</td>
+    <td>纯算法（无外部依赖）</td>
+  </tr>
+  <tr>
+    <td><strong>底部Tab导航</strong></td>
+    <td>信息架构设计</td>
+    <td>数据工具 Tab（首页入口）+ AI智投 Tab（二期预留）+ 页面栈导航（push/pop + 返回按钮，模拟微信小程序行为）</td>
+    <td>—</td>
+  </tr>
+</table>
+
+<!-- ================================================================ -->
+<!-- SECTION 4: Feature Deep-Dive -->
+<!-- ================================================================ -->
+<div class="page-break"></div>
+<h2>四、核心功能实现思路</h2>
+<p>每个功能按四步决策链展开：<strong>为什么需要 → 有哪些技术方式 → 选哪种 → 怎么实现</strong>。</p>
+
+<!--- FEATURE 1 -->
+<h3>4.1 全港成交列表（多维筛选）</h3>
+
+<h4>❓ 为什么需要这个功能？</h4>
+<p>现有平台的成交数据要么只展示不筛选，要么筛选维度单一（只能按区域）。但用户买房的真实决策路径是：<strong>先定区域 → 再看面积范围（总价预算÷单价）→ 再看具体楼层/朝向/间隔</strong>。如果筛选能力不够，用户需要手动翻几十页才能找到符合预算的房源。所以功能目标是让用户在一个页面里完成<strong>区域×面积×价格×排序</strong>的多维筛选。</p>
+
+<h4>🔧 有哪些技术方式？</h4>
+<table>
+  <tr><th>方案</th><th>做法</th><th>优点</th><th>缺点</th></tr>
+  <tr><td><strong>方案A</strong>：前端全量加载后内存过滤</td><td>首次加载返回全部数据（~1000条JSON，约500KB），筛选和排序全在浏览器内存完成</td><td>筛选无延迟，无需网络往返</td><td>数据量增长后首屏加载变慢；筛选逻辑放前端，后续加维度要改前端代码</td></tr>
+  <tr><td><strong>方案B</strong>：后端SQL筛选+分页返回</td><td>每次筛选变化发一次API请求，筛选条件作为query params传后端，后端在数据库层过滤后分页返回</td><td>筛选逻辑在SQL层，维度任意加；网络传输量小</td><td>每次筛选有HTTP往返延迟</td></tr>
+  <tr><td><strong>方案C</strong>：Elasticsearch聚合查询</td><td>所有成交数据预先索引到ES，筛选转为ES的filter aggregation</td><td>搜索体验最好，支持复杂聚合</td><td>MVP阶段增加运维复杂度，数据量小没必要</td></tr>
+</table>
+
+<h4>✅ 选择什么技术？方案B</h4>
+<p>MVP 阶段全港一月成交只有几千条，PostgreSQL 的单表查询完全够用。筛选项作为 URL query params 传给 <code>/api/v1/transactions</code>，后端在数据层做过滤——这个接口在真实部署时翻译为 SQL WHERE 子句，演示阶段在内存中模拟了完整的过滤管道。</p>
+
+<h4>⚙️ 如何实现的？</h4>
+<p><strong>前端：</strong>四个 filter-chip 按钮（区域/面积/楼价/排序），点击弹出 filter-options 面板，用户选择后调用 <code>applyFilters()</code>，组装 query params，fetch API。</p>
+<p><strong>后端：</strong>接收 district / area_min / area_max / price_min / price_max / sort 参数 → 先查 Redis 缓存 → 缓存未命中则触发 B 类 Playwright 爬虫 → 返回的数据走过滤管道 → 排序 → 分页 → 返回 JSON。</p>
+<p><strong>数据源可见性设计：</strong>列表页面底部有一个绿色数据来源标注条，显示"📡 数据来源: 28Hse (实时爬取, 2340ms) | B类数据 — Redis TTL=6h"，让技术官一眼能确认 B 类策略在运行。</p>
+
+<!--- FEATURE 2 -->
+<h3>4.2 成交详情 + AI估值对比（Class D深链接）</h3>
+
+<h4>❓ 为什么需要这个功能？</h4>
+<p>用户看到一套房子的成交价（比如 800 万），自然想知道"这个价买贵了还是便宜了"——需要和银行估价做对比。银行给同一套房的估价可能是 780 万（折让 2.5%）或 820 万（溢价 2.5%），这个对比对买家决策至关重要。但银行的在线估价系统有法律保护，<strong>不能爬、不能存、不能中转</strong>。</p>
+
+<h4>🔧 有哪些技术方式？</h4>
+<table>
+  <tr><th>方案</th><th>做法</th><th>风险</th></tr>
+  <tr><td><strong>方案A</strong>：后端爬银行估价</td><td>用户查看成交详情时，后端发HTTP请求到银行估价页面，解析估价结果，存数据库，和成交价做对比展示</td><td>🚫 <strong>法律红线。</strong>银行估价系统有明确使用条款限制，爬取可能引发法律纠纷</td></tr>
+  <tr><td><strong>方案B</strong>：前端深链接跳转</td><td>在成交详情页展示银行名称+链接按钮，用户点击后 <code>&lt;a target="_blank"&gt;</code> 直接打开银行官网</td><td>✅ <strong>零法律风险。</strong>平台不获取、不存储、不中转任何银行数据</td></tr>
+  <tr><td><strong>方案C</strong>：iframe嵌入银行页面</td><td>在平台内用iframe嵌入银行估价页面</td><td>⚠️ 银行大概率设置X-Frame-Options: DENY；且有误导用户以为数据来自平台的合规风险</td></tr>
+</table>
+
+<h4>✅ 选择什么技术？方案B</h4>
+<p>这是整个项目合规策略的<strong>核心决策点</strong>。Class D 数据不仅不爬，连后端中转都不做。前端直接用 <code>&lt;a target="_blank"&gt;</code> 跳转官方站点，法律责任的获取主体是用户自己。</p>
+
+<h4>⚙️ 如何实现的？</h4>
+<p><code>class_d.js</code> 只做一件事：维护一个深链接字典，返回给前端。前端渲染时直接输出为 <code>&lt;a&gt;</code> 标签。成交详情页同时展示了<strong>放盘交易历程时间线</strong>——首次挂牌→调价→调价→签约成交→正式售出，用户在一条竖线里看到价格变化全过程。</p>
+
+<!--- FEATURE 3 -->
+<h3>4.3 AI市场洞察横幅</h3>
+
+<h4>❓ 为什么需要这个功能？</h4>
+<p>原型图首页有一个 AI 洞察区域。用户打开小程序不总是带着明确目的，有时只是"看看最近市场怎么样"→ 需要一个自然语言的摘要告诉用户今天的市场温度。</p>
+
+<h4>🔧 有哪些技术方式？</h4>
+<table>
+  <tr><th>方案</th><th>做法</th><th>优点</th><th>缺点</th></tr>
+  <tr><td><strong>方案A</strong>：接入GPT/Claude API</td><td>每天定时调一次LLM，输入CCL指数+成交数据，生成自然语言摘要</td><td>效果最好，文案质量高</td><td>有成本（每次约$0.01-0.05）；实时性需求低，用大模型划不来</td></tr>
+  <tr><td><strong>方案B</strong>：规则模板引擎</td><td>根据CCL指数变化幅度套不同文案模板，用代码填充数字</td><td>零成本、零延迟、可预测</td><td>文案多样性有限</td></tr>
+  <tr><td><strong>方案C</strong>：本地轻量模型</td><td>部署Ollama等本地LLM生成摘要</td><td>无API成本</td><td>维护成本高、服务器资源消耗大</td></tr>
+</table>
+
+<h4>✅ 选择什么技术？方案B（MVP阶段）</h4>
+<p>CCL涨了就生成"市场气氛向好"模板，跌了就生成"议价空间扩大"模板，代码填充数字——几行if/else的事，完全够用。二期再切 LLM 生成更丰富的文案。</p>
+
+<h4>⚙️ 如何实现的？</h4>
+<p><code>class_c.js</code> 的 <code>getDailyMarketInsight()</code> 方法：生成随机但合理的CCL变动值 → 根据变动幅度选择文案模板 → 拼接热点区域 → 输出完整自然语言段落。</p>
+
+<!--- FEATURE 4 -->
+<h3>4.4 印花税计算器</h3>
+
+<h4>❓ 为什么需要这个功能？</h4>
+<p>香港买房印花税极其复杂——同一个800万的房子，首置买家交约27万，非首置换房交约147万，非永居海外买家交约267万。<strong>三种身份的税费差异高达近10倍。</strong>现有网上计算器要么只算AVD不包括BSD/NRSD，要么不区分买家身份，要么界面不友好。</p>
+
+<h4>🔧 有哪些技术方式？</h4>
+<p>这是一个<strong>纯算法问题</strong>——香港印花税是分段累进税率，规则明确，不依赖任何外部数据源。最直接的方式是一个 POST 端点接收 <code>(price, buyer_type)</code>，返回 <code>(AVD, BSD, NRSD, total)</code>。算法结果可离线验证——和税务局官网公布的税率表对账。</p>
+<p>没有技术选型的纠结。唯一的决策是放前端算还是后端算——<strong>放后端算</strong>，因为税率表将来可能调整，后端改一行代码就全局生效，前端算的话需要用户更新小程序版本。</p>
+
+<h4>⚙️ 如何实现的？</h4>
+<p>一个纯函数 <code>calcAVD(p)</code> 实现分段累进算法，BSD和NRSD分别是15%的固定税率。前端一个干净的表单（价格输入框 + 买家身份下拉选择 + 计算按钮）→ POST 请求 → 后端毫秒级返回分项结果 → 前端渲染分项表格。</p>
+
+<!--- FEATURE 5 -->
+<div class="page-break"></div>
+<h3>4.5 行情统计日报 + 指数展示</h3>
+
+<h4>❓ 为什么需要这个功能？</h4>
+<p>用户看成交数据是<strong>微观视角</strong>（一个房子、一个屋苑），看行情统计是<strong>宏观视角</strong>（全港趋势、分区对比）。两个视角互补。对标深圳小程序里的"行情日报"功能。</p>
+
+<h4>🔧 有哪些技术方式？</h4>
+<p>行情日报本质上是<strong>聚合查询</strong>——从成交表按"当天 + 分区"维度 GROUP BY，统计成交量、均价、挂盘数、涨跌数。CCL指数是现成的时序数据，直接从 <code>price_index</code> 表查即可。没有技术路线的分歧。</p>
+<p>C 类指数数据已经在 B 类爬虫时并行抓取并写入了独立索引表，这里<strong>只做查询不做采集</strong>。</p>
+
+<h4>⚙️ 如何实现的？</h4>
+<p>后端 <code>getMarketSnapshot()</code> 按港岛/九龙/新界三条记录返回今日快照。前端用 2×2 的卡牌网格展示，每个区一张卡——成交量 + 均呎价 + 涨跌数。下方跟 CCL 指数卡片，包含全港值 + 分区明细（港岛/九龙/新界东/新界西）。</p>
+
+<!-- ================================================================ -->
+<!-- SECTION 5: Tech Stack -->
+<!-- ================================================================ -->
+<div class="page-break"></div>
+<h2>五、技术选型总览</h2>
+
+<table>
+  <tr><th>层次</th><th>本次演示使用</th><th>生产环境规划</th><th>选型理由</th></tr>
+  <tr>
+    <td><strong>前端框架</strong></td>
+    <td>原生 HTML/CSS/JS</td>
+    <td>微信原生 / Taro / UniApp（仅小程序）</td>
+    <td>本项目范围不含H5；快速原型直接用原生JS验证交互流程</td>
+  </tr>
+  <tr>
+    <td><strong>API Gateway</strong></td>
+    <td>Express 路由</td>
+    <td>Nginx + Kong</td>
+    <td>成熟稳定，支持限流、鉴权、日志；MVP可用Nginx替代</td>
+  </tr>
+  <tr>
+    <td><strong>后端框架</strong></td>
+    <td>Node.js + Express</td>
+    <td>Python FastAPI</td>
+    <td>演示用Node.js（环境可用）；生产用FastAPI：异步高性能，与爬虫层Python生态统一</td>
+  </tr>
+  <tr>
+    <td><strong>爬虫引擎</strong></td>
+    <td>模拟缓存 + Playwright就绪</td>
+    <td>Playwright + Pandas + Camelot</td>
+    <td>Playwright支持无头浏览器渲染SPA页面；Pandas处理Excel；Camelot提取PDF表格</td>
+  </tr>
+  <tr>
+    <td><strong>数据库</strong></td>
+    <td>内存存储</td>
+    <td>PostgreSQL（含PostGIS）</td>
+    <td>JSONB支持半结构化物业数据；PostGIS支持未来地图空间查询</td>
+  </tr>
+  <tr>
+    <td><strong>搜索引擎</strong></td>
+    <td>内存模糊匹配</td>
+    <td>Elasticsearch</td>
+    <td>繁简体自动转换 + ICU分词 + 拼音搜索；解决"太古城"vs"太古城"的匹配问题</td>
+  </tr>
+  <tr>
+    <td><strong>缓存</strong></td>
+    <td>内存Map + TTL管理</td>
+    <td>Redis</td>
+    <td>B类数据6小时TTL缓存，用户触发式爬虫的天然限流阀</td>
+  </tr>
+  <tr>
+    <td><strong>定时调度</strong></td>
+    <td>—（演示用静态数据）</td>
+    <td>APScheduler</td>
+    <td>轻量级，适合A类月度定时任务</td>
+  </tr>
+  <tr>
+    <td><strong>对象存储</strong></td>
+    <td>—</td>
+    <td>MinIO / 云OSS</td>
+    <td>存储A类原始PDF/Excel文件留底</td>
+  </tr>
+  <tr>
+    <td><strong>AI / LLM</strong></td>
+    <td>规则模板</td>
+    <td>待确认（GPT-5.5 / Claude API）</td>
+    <td>二期AI对话顾问、智能估值对比文案生成</td>
+  </tr>
+</table>
+
+<!-- ================================================================ -->
+<!-- SECTION 6: Summary -->
+<!-- ================================================================ -->
+<h2>六、总结</h2>
+
+<blockquote>
+  <p>本次演示的核心价值不是技术炫技，而是<strong>数据合规分层架构的可运行证明</strong>。</p>
+</blockquote>
+
+<p>我从 A 类到 D 类每个类别各选了一个真实数据源，用对应的策略实现了端到端的数据流：</p>
+
+<p><strong>A类</strong> → 15个香港真实屋苑的结构化数据，模拟RVD月度Excel下载→解析→PostgreSQL入库</p>
+<p><strong>B类</strong> → 6家地产中介平台（中原/美联/28Hse/House730/Spacious/SEEHSE），用户触发Playwright爬取 + Redis 6h缓存 + 多源fallback</p>
+<p><strong>C类</strong> → CCL + 美联楼价指数，寄生B类并行采集，独立索引存储</p>
+<p><strong>D类</strong> → 土地注册处 + 3家银行估价，<strong>零爬取、零存储、零后端交互</strong>，仅前端深链接跳转</p>
+
+<p>用户可以在这个仿微信小程序里走完<strong>"搜索屋苑 → 浏览全港成交 → 多维筛选 → 查看成交详情 → AI估值对比（跳转银行官网）→ 税费计算"</strong>的完整链路。</p>
+
+<p>数据源策略在每次 API 响应中<strong>可见、可审计</strong>——缓存命中/实时爬取、数据来源平台、响应耗时，全部标注在交互界面上。这就是这个 demo 想传达的核心信息。</p>
+
+<p style="text-align:center; color:#999; margin-top:30px">— END —</p>
+
+</body>
+</html>
